@@ -128,11 +128,11 @@ opt_parser = OptionParser.new do |opts|
 		options[:client_id] = client_id
 	end
 
-	opts.on("-u", "--updateCycle=", "Set updateCycle [Sec] (default:#{options[:updateCycle]}") do |updateCycle|
+	opts.on("-u", "--updateCycle=", "Set updateCycle [Sec] (default:#{options[:updateCycle]})") do |updateCycle|
 		options[:updateCycle] = updateCycle.to_i
 	end
 
-	opts.on("-w", "--windowPeriod=", "Set windowPeriod [Sec] (default:#{options[:windowPeriod]}") do |windowPeriod|
+	opts.on("-w", "--windowPeriod=", "Set windowPeriod [Sec] (default:#{options[:windowPeriod]})") do |windowPeriod|
 		options[:windowPeriod] = windowPeriod.to_i
 	end
 end.parse!
