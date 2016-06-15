@@ -1,14 +1,18 @@
 function dataReduction(data, maxNum)
 {
-	var result = []
-	for(var j=0, c=data.length; j<c; j++){
-		var vals = []
-		for(var i=0, num=data[j].length, step=Math.round(num/maxNum); i<num; i=i+step){
-			vals.push( data[j][i] )
+	if( data[0].length < maxNum ){
+		return data;
+	} else {
+		var result = []
+		for(var j=0, c=data.length; j<c; j++){
+			var vals = []
+			for(var i=0, num=data[j].length, step=num/maxNum; i<num; i=i+step){
+				vals.push( data[j][Math.round(i)] )
+			}
+			result.push(vals);
 		}
-		result.push(vals);
+		return result;
 	}
-	return result;
 }
 
 
