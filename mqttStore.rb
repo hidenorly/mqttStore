@@ -102,8 +102,8 @@ def outputJSON(path, data)
 	fileWriter.close
 end
 
-def outputCSV(path, data)
-	fileWriter = File.open(path, "w")
+def outputCSV(path, data, writeMode="w")
+	fileWriter = File.open(path, writeMode)
 	data.each do |aData|
 		timeStr = aData[:time].to_s
 		pos = timeStr.rindex(" ")
@@ -115,24 +115,35 @@ def outputCSV(path, data)
 	fileWriter.close
 end
 
-def getFilename(path, topic, format)
+def getFilename(path, prefix, topic, format)
 	filename = path.to_s
 	filename = filename +"/" if !filename.end_with?("/")
+	filename = filename + prefix
+	filename = filename + "_" if !topic.start_with?("/") && !topic.start_with?("-")
 	filename = filename + topic.to_s.tr("/", "-")
 	filename = filename +"." if !filename.end_with?(".")
 	filename = filename + format
 	return filename
 end
 
-def outputPersistLogData(topicData, persistPath, lastTime)
+def outputPersistLogData(topicDataStore, persistPath, lastTime)
+	if nil!=persistPath then
+		topicDataStore.each do |topic, data|
+			# trim data within window period
+			index = getOldIndex(data, lastTime)
+			if index!=-1 then
+				outputCSV(getFilename(persistPath, "persist", topic, "csv"), data.slice(0,index), "a")
+			end
+		end
+	end
 end
 
 def createCacheFile(topic, data, format, cachePath)
 	case format
 		when "csv"
-			outputCSV(getFilename(cachePath, topic, format), data)
+			outputCSV(getFilename(cachePath, "cache", topic, format), data)
 		when "json"
-			outputJSON(getFilename(cachePath, topic, format), createOutputData(data, topic))
+			outputJSON(getFilename(cachePath, "cache", topic, format), createOutputData(data, topic))
 	end
 end
 
@@ -145,7 +156,7 @@ options = {
 	:password => nil,
 	:client_id => nil,
 	:topics => [],
-	:outDir => ".",
+	:outDir => nil,
 	:cacheDir => ".",
 	:updateCycle => 5,
 	:windowPeriod => 3600,

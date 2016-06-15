@@ -106,7 +106,6 @@ client = connectMqtt()
 client.subscribe(options[:topics])
 
 $g_repeatCycle = options[:repeatCycle]
-$g_windowPeriod = options[:windowPeriod]
 
 publishingData = []
 options[:topics].each do |aTopic|
