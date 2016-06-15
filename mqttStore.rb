@@ -18,6 +18,7 @@ require 'optparse'
 require 'rubygems'
 require 'mqtt'
 require 'thread'
+require 'json'
 
 # --- global
 $g_criticalSection = Mutex.new
@@ -74,6 +75,67 @@ def getOldIndex(data, targetTime)
 	return -1
 end
 
+def getTimeOnly(samplingTime)
+	pos1 = samplingTime.index(" ")
+	pos2 = samplingTime.rindex(" ")
+	return samplingTime.slice(pos1+1, pos2-pos1-1) if pos1!=nil && pos2!=nil
+	return samplingTime
+end
+
+def createOutputData(inData, topic)
+	outData = []
+	labels = [ "time" ]
+	values = [ topic ]
+	inData.each do |aData|
+		labels << getTimeOnly(aData[:time].to_s)
+		values << aData[:value]
+	end
+	outData << labels
+	outData << values
+	return outData
+end
+
+def outputJSON(path, data)
+	fileWriter = File.open(path, "w")
+#	puts JSON.dump(data)
+	JSON.dump(data, fileWriter)
+	fileWriter.close
+end
+
+def outputCSV(path, data)
+	fileWriter = File.open(path, "w")
+	data.each do |aData|
+		timeStr = aData[:time].to_s
+		pos = timeStr.rindex(" ")
+		timeStr = timeStr.slice(0, pos) if pos!=nil
+		outBuf = "#{timeStr},#{aData[:value]}"
+		fileWriter.puts outBuf
+		puts outBuf
+	end
+	fileWriter.close
+end
+
+def getFilename(path, topic, format)
+	filename = path.to_s
+	filename = filename +"/" if !filename.end_with?("/")
+	filename = filename + topic.to_s.tr("/", "-")
+	filename = filename +"." if !filename.end_with?(".")
+	filename = filename + format
+	return filename
+end
+
+def outputPersistLogData(topicData, persistPath, lastTime)
+end
+
+def createCacheFile(topic, data, format, cachePath)
+	case format
+		when "csv"
+			outputCSV(getFilename(cachePath, topic, format), data)
+		when "json"
+			outputJSON(getFilename(cachePath, topic, format), createOutputData(data, topic))
+	end
+end
+
 #---- main --------------------------
 options = {
 	:host => "localhost",
@@ -86,7 +148,8 @@ options = {
 	:outDir => ".",
 	:cacheDir => ".",
 	:updateCycle => 5,
-	:windowPeriod => 3600
+	:windowPeriod => 3600,
+	:format => "json"
 }
 
 opt_parser = OptionParser.new do |opts|
@@ -124,7 +187,7 @@ opt_parser = OptionParser.new do |opts|
 		options[:cacheDir] = cacheDir
 	end
 
-	opts.on("", "--client_id=", "Set client ID (default:#{options[:client_id]}") do |client_id|
+	opts.on("", "--client_id=", "Set client ID (default:#{options[:client_id]})") do |client_id|
 		options[:client_id] = client_id
 	end
 
@@ -134,6 +197,10 @@ opt_parser = OptionParser.new do |opts|
 
 	opts.on("-w", "--windowPeriod=", "Set windowPeriod [Sec] (default:#{options[:windowPeriod]})") do |windowPeriod|
 		options[:windowPeriod] = windowPeriod.to_i
+	end
+
+	opts.on("-f", "--format=", "Set output cache format json,csv(default:#{options[:format]})") do |format|
+		options[:format] = format
 	end
 end.parse!
 
@@ -153,9 +220,11 @@ a = Thread.new {
 		data = []
 		$g_criticalSection.synchronize{
 			$g_eventFlag.wait($g_criticalSection)
-			while( $g_result.size>0 ) do
-				data << $g_result.pop()
-			end
+			#while( $g_result.size>0 ) do
+			#	data << $g_result.slice!(0)
+			#end
+			data = data + $g_result
+			$g_result = []
 		}
 		# store received data to sorted topic data
 		data.each do |aMes|
@@ -163,12 +232,13 @@ a = Thread.new {
 			topicDataStore[ aMes[:topic] ] = Array.new if !topicDataStore.has_key?(aMes[:topic])
 			last = topicDataStore[ aMes[:topic] ].last
 			if last==nil || last[:time]<aMes[:time] then
-				topicDataStore[ aMes[:topic] ].push( { :time=>aMes[:time], :value=>aMes[:message] } )
+				topicDataStore[ aMes[:topic] ] << { :time=>aMes[:time], :value=>aMes[:message] }
 			end
 		end
 		# update data
 		now = Time.now
 		if (now-lastTime)>$g_updateCycle then
+			outputPersistLogData(topicDataStore, options[:outDir], lastTime)
 			lastTime = now
 			targetTime = now - $g_windowPeriod
 #			puts "updated #{lastTime} / #{targetTime}"
@@ -176,10 +246,10 @@ a = Thread.new {
 				# trim data within window period
 				index = getOldIndex(data, targetTime)
 				if index!=-1 then
-					# TODO : write data to file as append
 					data.slice!(0,index)
 				end
-				puts data # output this trimed data to cache file
+#				puts "#{topic}:#{data}" # output this trimed data to cache file
+				createCacheFile(topic, data, options[:format], options[:cacheDir])
 			end
 		end
 	end
